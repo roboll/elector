@@ -8,7 +8,7 @@ _elector_ is a general purpose leader election utility, providing a pluggable ba
 
 ### cli
 
-The cli for _elector_ accepts a `leader-begin-command` and `leader-end-command`; the former executed during transitions _to_ leader state, and the latter during transitions _from_ leader state.
+The cli for _elector_ accepts a `leader-begin-command` and `leader-end-command`; the former executed during transitions _to_ leader state, and the latter during transitions _from_ leader state. (`leader-begin-command` and `leader-end-command` are shell commands)
 
 ### library
 
