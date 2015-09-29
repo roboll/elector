@@ -93,11 +93,12 @@ func (e *Elector) reconcileState(update State) {
 		if e.state == StateLeader {
 			log.Println("state: received LEADER (was already LEADER)")
 		} else {
-			e.state = StateLeader
 			err := e.BeginLeaderHandler()
 			if err != nil {
 				log.Println("state: LeaderHandler returned an error; sending error state.")
 				e.updates <- StateError
+			} else {
+				e.state = StateLeader
 			}
 		}
 
