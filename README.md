@@ -16,7 +16,7 @@ The _elector_ library defines two basic interfaces; `ElectionBackend`, a backend
 
 An `ElectorBackend` defines `ElectionLoop`, which is not expected to return, barring unrecoverable errors. It should continue to source election events and send `elector.State` messages to the `updates` channel (`StateLeader`, `StateNotLeader`, `StateError`). The reconciliation loop handles the transitions between states and executes the necessary handlers.
 
-A `Handler` is executed by the reconciliation loop when state transitions occur _to_ and _from_ leader state. It is a function that accepts no arguments and returns and `error` in case it cannot complete it's task. In case of an error, the reconciliation loop will transition to `StateError`, ensuring that the _elector_ relinquishes master state and waits a given timeout before resuming candidacy.
+A `Handler` is executed by the reconciliation loop when state transitions occur _to_ and _from_ leader state. It is a function that accepts no arguments and returns and `error` in case it cannot complete it's task. Handlers should be resilient, i.e. if a handler receives an error that is recoverable it should handle it's own retry logic. The _elector_ will attempt retries in a failure, but because it has not knowledge of the underlying command, has less flexibility in its operation. In case of an error, the reconciliation loop will transition to `StateError`, ensuring that the _elector_ relinquishes master state and waits a given timeout before resuming candidacy.
 
 #### extending / usage
 
