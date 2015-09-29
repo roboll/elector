@@ -33,14 +33,14 @@ func main() {
 
 var flags = []cli.Flag{
 	cli.StringFlag{
-		Name:   "keyspace",
-		Usage:  "keyspace to elect on",
-		EnvVar: "ELECTOR_KEY",
-	},
-	cli.StringFlag{
 		Name:   "backend",
 		Usage:  "backend name",
 		EnvVar: "ELECTOR_BACKEND",
+	},
+	cli.StringFlag{
+		Name:   "instance-id",
+		Usage:  "unique id, falls back to hostname",
+		EnvVar: "ELECTOR_INSTANCE_ID",
 	},
 	cli.StringFlag{
 		Name:   "leader-start-command",
@@ -52,15 +52,15 @@ var flags = []cli.Flag{
 		Usage:  "leader end command - runs when state changes from LEADER",
 		EnvVar: "ELECTOR_STOP_COMMAND",
 	},
+	cli.StringFlag{
+		Name:   "etcd-keyspace",
+		Usage:  "etcd keyspace to elect on",
+		EnvVar: "ELECTOR_KEY",
+	},
 	cli.StringSliceFlag{
 		Name:   "etcd-members",
 		Usage:  "etcd members",
 		EnvVar: "ELECTOR_ETCD_MEMBERS",
-	},
-	cli.StringFlag{
-		Name:   "instance-id",
-		Usage:  "unique id, falls back to hostname",
-		EnvVar: "ELECTOR_INSTANCE_ID",
 	},
 }
 
@@ -75,7 +75,7 @@ var runFlags = []cli.Flag{
 var commands = []cli.Command{
 	{
 		Name:        "run",
-		Description: "begin monitoring key for election",
+		Description: "begin election",
 		Action:      runWithArgs,
 		Flags:       runFlags,
 	},
@@ -102,8 +102,8 @@ func runWithArgs(c *cli.Context) {
 	var backend elector.ElectionBackend
 
 	switch backendName {
-	case "etcd":
-		keyspace := c.GlobalString("keyspace")
+	case "etcd-lock":
+		keyspace := c.GlobalString("etcd-keyspace")
 		if keyspace == "" {
 			log.Fatal("keyspace is required.")
 		}
@@ -119,7 +119,7 @@ func runWithArgs(c *cli.Context) {
 		certFile := c.GlobalString("cert-file")
 		keyFile := c.GlobalString("key-file")
 
-		backend = &backends.Etcd{
+		backend = &backends.EtcdLock{
 			Members:    &members,
 			Keyspace:   &keyspace,
 			InstanceID: &instanceID,
@@ -135,7 +135,7 @@ func runWithArgs(c *cli.Context) {
 	}
 
 	elector := &elector.Elector{
-		StartLeaderHandler: handlers.CommandHandler(&startCmd),
+		BeginLeaderHandler: handlers.CommandHandler(&startCmd),
 		EndLeaderHandler:   handlers.CommandHandler(&endCmd),
 		ErrorHandler:       handlers.TimeoutHandler(&timeout),
 

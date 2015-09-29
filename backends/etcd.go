@@ -11,8 +11,8 @@ import (
 
 import "github.com/roboll/elector/elector"
 
-// Etcd is an election backend powered by etcd.
-type Etcd struct {
+// EtcdLock is an election backend powered by EtcdLock.
+type EtcdLock struct {
 	Members *[]string
 
 	InstanceID      *string
@@ -25,8 +25,8 @@ type Etcd struct {
 	KeyFile  *string
 }
 
-// ElectionLoop uses etcd to elect a leader based on a configured key.
-func (e *Etcd) ElectionLoop(updates chan elector.State) error {
+// ElectionLoop uses EtcdLock to elect a leader based on a configured key.
+func (e *EtcdLock) ElectionLoop(updates chan elector.State) error {
 	err := e.setFallbackOptions()
 	if err != nil {
 		return err
@@ -34,64 +34,64 @@ func (e *Etcd) ElectionLoop(updates chan elector.State) error {
 
 	updates <- elector.StateNotLeader
 
-	etcdClient, err := newEtcdClient(e)
+	EtcdLockClient, err := newEtcdLockClient(e)
 	if err != nil {
 		return err
 	}
 
-	lock, err := utils.NewMaster(etcdClient, *e.Keyspace, *e.InstanceID, 30)
+	lock, err := utils.NewMaster(EtcdLockClient, *e.Keyspace, *e.InstanceID, 30)
 	go e.waitForChanges(updates, lock.EventsChan())
 
-	log.Println("etcd: starting lock acquisition")
+	log.Println("EtcdLock: starting lock acquisition")
 	lock.Start()
 
 	return nil
 }
 
-func (e *Etcd) waitForChanges(updates chan elector.State, eventsCh <-chan utils.MasterEvent) {
+func (e *EtcdLock) waitForChanges(updates chan elector.State, eventsCh <-chan utils.MasterEvent) {
 	for {
 		select {
 		case evt := <-eventsCh:
 			if evt.Type == utils.MasterAdded {
-				log.Println("etcd: rcvd a master added event")
+				log.Println("EtcdLock: rcvd a master added event")
 				updates <- elector.StateLeader
 			} else if evt.Type == utils.MasterDeleted {
-				log.Println("etcd: rcvd a master deleted event.")
+				log.Println("EtcdLock: rcvd a master deleted event.")
 				updates <- elector.StateNotLeader
 			} else {
-				log.Println("etcd: leader changed. doing nothing.")
+				log.Println("EtcdLock: leader changed. doing nothing.")
 			}
 		}
 	}
 }
 
-func (e *Etcd) setFallbackOptions() error {
+func (e *EtcdLock) setFallbackOptions() error {
 	if e.TTL == nil {
-		log.Println("etcd: TTL not set, falling back to default (60s)")
+		log.Println("EtcdLock: TTL not set, falling back to default (60s)")
 		ttl := 1 * time.Minute
 		e.TTL = &ttl
 	}
 
 	if e.RefreshInterval == nil {
-		log.Println("etcd: RefreshInterval not set, falling back to default (TTL / 2)")
+		log.Println("EtcdLock: RefreshInterval not set, falling back to default (TTL / 2)")
 		interval := *e.TTL / 2
 		e.RefreshInterval = &interval
 	}
 
 	if e.InstanceID == nil {
-		log.Println("etcd: InstanceID not set, falling back to hostname")
+		log.Println("EtcdLock: InstanceID not set, falling back to hostname")
 		hostname, err := os.Hostname()
 		if err != nil {
 			return err
 		}
-		log.Printf("etcd: using %s as InstanceID", hostname)
+		log.Printf("EtcdLock: using %s as InstanceID", hostname)
 		e.InstanceID = &hostname
 	}
 
 	return nil
 }
 
-func newEtcdClient(e *Etcd) (utils.Registry, error) {
+func newEtcdLockClient(e *EtcdLock) (utils.Registry, error) {
 	var c utils.Registry
 	// if all are set, try to use tls
 	if *e.CertFile != "" && *e.KeyFile != "" && *e.CAFile != "" {

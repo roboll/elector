@@ -9,15 +9,18 @@ import (
 // Elector is a _stateful_ leader elector. It uses etcd to manage leader election based on the configured `Key`, executing `LeaderHandler` when newly elected as leader, and `FollowerHandler` when losing leader state. **Elector is stateful - it can be queried for its state, but this tradeoff means it cannot be 'Run()' multiple times.**
 type Elector struct {
 	Key                *string
-	StartLeaderHandler func() error
-	EndLeaderHandler   func() error
-	ErrorHandler       func() error
+	BeginLeaderHandler Handler
+	EndLeaderHandler   Handler
+	ErrorHandler       Handler
 
 	ElectionBackend ElectionBackend
 
 	updates chan State
 	state   State
 }
+
+// Handler is registered and executed on leader election events.
+type Handler func() error
 
 // ElectionBackend handles election, sending state messages as appropriate.
 // ElectionBackend executes on the main goroutine, and so is expected not to return.
@@ -78,7 +81,7 @@ func (e *Elector) reconcileState(update State) {
 			log.Println("state: received LEADER (was already LEADER)")
 		} else {
 			e.state = StateLeader
-			err := e.StartLeaderHandler()
+			err := e.BeginLeaderHandler()
 			if err != nil {
 				log.Println("state: LeaderHandler returned an error; sending error state.")
 				e.updates <- StateError

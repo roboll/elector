@@ -2,10 +2,10 @@ package elector
 
 import "testing"
 
-func TestElectorLeaderHandlerExecution(t *testing.T) {
+func TestElectorBeginLeaderHandlerExecution(t *testing.T) {
 	executed := false
 	elector := &Elector{
-		StartLeaderHandler: func() error {
+		BeginLeaderHandler: func() error {
 			executed = true
 			return nil
 		},
