@@ -35,3 +35,38 @@ The `etcd-lock` backend is supported by [etcd-lock](https://github.com/datawises
 ### console
 
 The `console` backend is used for testing proper execution of state transitions and handlers. It sources election events from the console, i.e. your terminal. It allows input of text events (`LEADER`, `NOTLEADER`, `ERROR`).
+
+## reconciliation loop logic
+
+Because _elector_ manages local state with the state of a remote leader election, it requires logic to reconcile local state machine with messages from the remote system. The reconciliation loop behaves as follows:
+
+```
+    message rcvd:
+		case StateLeader:
+			if state == StateNotLeader
+				err = exec BeginLeaderHandler
+				if not err
+					state = StateLeader
+				if err
+					<- StateError
+
+		case StateNotLeader:
+			if state == StateLeader
+				err = exec EndLeaderHandler
+				if not err
+					state = StateNotLeader
+				if err
+					<- StateError
+
+		case Error:
+			if state == StateLeader
+				err = exec EndLeaderHandler
+				if not err
+					state = StateError
+					exec ErrorHandler (timeout)
+					state = StateNotLeader
+				if err
+					<- StateError
+```
+
+__WARNING__: after a `StateError` message, if the `EndLeaderHandler` fails repeatedly, there is a condition where the local system may continue to operate as leader (as is the case with any failure of the `EndLeaderHandler`). The loop will continue to retry every 5s for 12 attempts, after which it will exit the system and log failure messages.

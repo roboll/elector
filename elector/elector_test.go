@@ -38,7 +38,7 @@ func TestElectorNotLeaderHandlerExecution(t *testing.T) {
 	}
 }
 
-func TestElectorErrorHandlerExecution(t *testing.T) {
+func TestElectorErrorHandlerFromNotLeaderExecution(t *testing.T) {
 	executed := false
 
 	elector := &Elector{
@@ -47,9 +47,37 @@ func TestElectorErrorHandlerExecution(t *testing.T) {
 			return nil
 		},
 	}
+	elector.state = StateNotLeader
 	elector.reconcileState(StateError)
 	if executed == false {
 		t.Error("error handler didnt execute on error message")
+	}
+	if elector.state != StateNotLeader {
+		t.Error("elector state was not NOTLEADER after error message")
+	}
+}
+
+func TestElectorErrorHandlerFromLeaderExecution(t *testing.T) {
+	errorHandler := false
+	notLeaderHandler := false
+
+	elector := &Elector{
+		EndLeaderHandler: func() error {
+			notLeaderHandler = true
+			return nil
+		},
+		ErrorHandler: func() error {
+			errorHandler = true
+			return nil
+		},
+	}
+	elector.state = StateLeader
+	elector.reconcileState(StateError)
+	if errorHandler == false {
+		t.Error("error handler didnt execute on error message")
+	}
+	if notLeaderHandler == false {
+		t.Error("not header handler didnt execute on error message from LEADER")
 	}
 	if elector.state != StateNotLeader {
 		t.Error("elector state was not NOTLEADER after error message")

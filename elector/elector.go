@@ -3,7 +3,11 @@ package elector
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
+	"time"
 )
 
 // Elector is a _stateful_ leader elector. It uses etcd to manage leader election based on the configured `Key`, executing `LeaderHandler` when newly elected as leader, and `FollowerHandler` when losing leader state. **Elector is stateful - it can be queried for its state, but this tradeoff means it cannot be 'Run()' multiple times.**
@@ -53,11 +57,21 @@ func (e *Elector) Run() error {
 		return fmt.Errorf("Elector has already been initialized. Electors can be started once.")
 	}
 
-	//0 so blocks on updates while error handler is executing
+	// 0 so blocks on updates while error handler is executing
 	e.updates = make(chan State)
 
 	go e.reconcileStateLoop()
 	go e.ElectionBackend.ElectionLoop(e.updates)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		<-c
+		e.updates <- StateNotLeader
+		log.Println("Allowing 10s for StateNotLeader to process.")
+		time.Sleep(10 * time.Second)
+	}()
 
 	group := sync.WaitGroup{}
 	group.Add(2)
@@ -76,7 +90,6 @@ func (e *Elector) reconcileStateLoop() {
 func (e *Elector) reconcileState(update State) {
 	switch update {
 	case StateLeader:
-
 		if e.state == StateLeader {
 			log.Println("state: received LEADER (was already LEADER)")
 		} else {
@@ -91,11 +104,13 @@ func (e *Elector) reconcileState(update State) {
 	case StateNotLeader:
 		if e.state == StateLeader {
 			log.Println("state: received NOTLEADER (was LEADER)")
-			e.state = StateNotLeader
 			err := e.EndLeaderHandler()
 			if err != nil {
 				log.Println("state: EndLeaderHandler returned an error; sending error state.")
+				log.Println("state: Not transitioning to StateNotLeader - EndLeaderHandler failed (sending StateError). (will retry)")
 				e.updates <- StateError
+			} else {
+				e.state = StateNotLeader
 			}
 		} else {
 			log.Printf("state: received NOTLEADER (was %s)\n", e.state)
@@ -106,24 +121,43 @@ func (e *Elector) reconcileState(update State) {
 		log.Println("state: received ERROR")
 		if e.state == StateLeader {
 			log.Println("state: received ERROR (was LEADER)")
-			err := e.EndLeaderHandler()
-			if err != nil {
-				log.Println("state: EndLeaderHandler returned an error; already in error state.")
+
+			retries := 12
+			failed := 0
+
+			var timeout time.Duration = 5
+
+			for failed < retries {
+				if err := e.EndLeaderHandler(); err != nil {
+					log.Println("state: EndLeaderHandler returned an error; already rcvd error message.")
+					log.Println("state: Not transitioning to StateNotLeader - will retry in 5s.")
+					failed++
+					time.Sleep(timeout * time.Second)
+				} else {
+					e.state = StateNotLeader
+					break
+				}
+			}
+			if e.state != StateNotLeader {
+				log.Printf("state: FAILURE: failed to execute EndLeaderHandler %d times every %ds.\n", failed, timeout)
+				log.Fatal("state: FAILURE: exiting. the state of this system may be inconsistent.")
 			}
 		}
-		e.state = StateError
-		err := e.ErrorHandler()
-		if err != nil {
-			log.Println("state: ErrorHandler returned an error; sending another error state.")
-			e.updates <- StateError
-		} else {
-			log.Println("state: ErrorHandler returned successful; setting state to NotLeader and draining queue")
-			numLost := len(e.updates)
-			log.Printf("state: lost %d updates during ErrorHandler execution.", numLost)
-			for i := 0; i < numLost; i++ {
-				log.Printf("state: lost %s during ErrorHandler execution.", <-e.updates)
+		if e.state == StateNotLeader {
+			e.state = StateError
+			err := e.ErrorHandler()
+			if err != nil {
+				log.Println("state: ErrorHandler returned an error; sending another error state.")
+				e.updates <- StateError
+			} else {
+				log.Println("state: ErrorHandler returned successful; setting state to NotLeader and draining queue.")
+				numLost := len(e.updates)
+				log.Printf("state: lost %d updates during ErrorHandler execution.", numLost)
+				for i := 0; i < numLost; i++ {
+					log.Printf("state: lost %s during ErrorHandler execution.", <-e.updates)
+				}
+				e.state = StateNotLeader
 			}
-			e.state = StateNotLeader
 		}
 	}
 }
