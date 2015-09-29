@@ -18,11 +18,19 @@ An `ElectorBackend` defines `ElectionLoop`, which is not expected to return, bar
 
 A `Handler` is executed by the reconciliation loop when state transitions occur _to_ and _from_ leader state. It is a function that accepts no arguments and returns and `error` in case it cannot complete it's task. In case of an error, the reconciliation loop will transition to `StateError`, ensuring that the _elector_ relinquishes master state and waits a given timeout before resuming candidacy.
 
+#### extending / usage
+
+To define an `ElectorBackend` take a look at the [console](backends/console.go) implementation - it is very straightforward.
+
+To define custom handlers take a look at the pre-defined [handlers](backends/handlers.go), also very straightforward.
+
+For custom usage of an elector, take a look at it's usage in [main](main.go#L137). Create an `elector.Elector`, define it's backend and handlers, and call `Run()`.
+
 ## backends
 
 ### etcd-lock
 
-The `etcd-lock` backend is supported by [etcd-lock](https://github.com/datawisesystems/etcd-lock). It acquires a lock on a node (`keyspace`) in etcd and continually updates the ttl on that node to maintain leader state.
+The `etcd-lock` backend is supported by [etcd-lock](https://github.com/datawisesystems/etcd-lock). It acquires a lock on a node (`keyspace`) in etcd and continually updates the ttl on that node to maintain leader state. It supports full tls security.
 
 ### console
 
