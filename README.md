@@ -22,7 +22,7 @@ A `Handler` is executed by the reconciliation loop when state transitions occur 
 
 To define an `ElectorBackend` take a look at the [console](backends/console.go) implementation - it is very straightforward.
 
-To define custom handlers take a look at the pre-defined [handlers](backends/handlers.go), also very straightforward.
+To define custom handlers take a look at the pre-defined [handlers](handlers/handlers.go), also very straightforward.
 
 For custom usage of an elector, take a look at it's usage in [main](main.go#L137). Create an `elector.Elector`, define it's backend and handlers, and call `Run()`.
 
